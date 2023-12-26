@@ -10,24 +10,34 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000; 
 
-const bcrypt = require('bcrypt');
-const saltround = 10;
-var hashed;
-
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+
 const options = {
     definition: {
         openapi: '3.0.0',
         info: {
-            title:'MyVMS API',
-            version: '1.0.0',
+            title: 'VMS API',
+            version: '1.0.0'
+        },
+        components: {  // Add 'components' section
+            securitySchemes: {  // Define 'securitySchemes'
+                bearerAuth: {  // Define 'bearerAuth'
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT'
+                }
+            }
         }
     },
-    apis: ['./index.js'],//files containing annotations as above
+    apis: ['./index.js'],
 };
+
 const swaggerSpec = swaggerJsdoc(options);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+const bcrypt = require('bcrypt');
+var hashed;
 
 app.use(express.json())
 
@@ -254,6 +264,129 @@ async function viewVisitors(identification_No, role){
 
 
 //post method to register visitor
+/**
+ * @swagger
+ * /user/registerVisitor:
+ *   post:
+ *     summary: Register a visitor
+ *     description: Register a visitor with required details
+ *     tags:
+ *       - Staff
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               gender:
+ *                 type: string
+ *               ethnicity:
+ *                 type: string
+ *               temperature:
+ *                 type: string
+ *               dateofbirth:
+ *                 type: string
+ *               citizenship:
+ *                 type: string
+ *               document_type:
+ *                 type: string
+ *               expiryDate:
+ *                 type: string
+ *                 format: date
+ *               address:
+ *                 type: string
+ *               town:
+ *                 type: string
+ *               postcode:
+ *                 type: string
+ *               state:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *               phone_number:
+ *                 type: string
+ *               vehicle_number:
+ *                 type: string
+ *               vehicle_type:
+ *                 type: string
+ *               visitor_category:
+ *                 type: string
+ *               preregistered_pass:
+ *                 type: string
+ *               no_of_visitors:
+ *                 type: string
+ *               purpose_of_visit:
+ *                 type: string
+ *               visit_limit_hrs:
+ *                 type: string
+ *               visit_limit_min:
+ *                 type: string
+ *               To_meet:
+ *                 type: string
+ *               Host_Information:
+ *                 type: string
+ *               Location_or_department:
+ *                 type: string
+ *               Unit_no:
+ *                 type: string
+ *               Location_Information:
+ *                 type: string
+ *               Permit_number:
+ *                 type: string
+ *               Delivery_Order:
+ *                 type: string
+ *               Remarks:
+ *                 type: string
+ *               fever:
+ *                 type: string
+ *               sore_throat:
+ *                 type: string
+ *               dry_cough:
+ *                 type: string
+ *               runny_nose:
+ *                 type: string
+ *               shortness_of_breath:
+ *                 type: string
+ *               body_ache:
+ *                 type: string
+ *               travelled_oversea_last_14_days:
+ *                 type: string
+ *               contact_with_person_with_Covid_19:
+ *                 type: string
+ *               recovered_from_covid_19:
+ *                 type: string
+ *               covid_19_test:
+ *                 type: string
+ *               date:
+ *                 type: string
+ *                 format: date
+ *     responses:
+ *       '200':
+ *         description: Visitor registration successful
+ *       '400':
+ *         description: Invalid request body or insufficient permissions
+ *       '401':
+ *         description: Unauthorized - Invalid token or insufficient permissions
+ *     consumes:
+ *       - "application/json"
+ *     produces:
+ *       - "application/json"
+ *   securityDefinitions:
+ *     JWT:
+ *       type: "apiKey"
+ *       name: "Authorization"
+ *       in: "header"
+ */
+
 app.post('/user/registerVisitor', async function(req, res){
     var token = req.header('Authorization').split(" ")[1];
     try {
@@ -271,14 +404,71 @@ app.post('/user/registerVisitor', async function(req, res){
     }
 });
 
-
 //login post for staff
+/**
+ * @swagger
+ * /user/login:
+ *   post:
+ *     summary: Authenticate user
+ *     description: Login with identification number and password
+ *     tags:
+ *       - Staff
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       '200':
+ *         description: Login successful
+ *         content:
+ *           text/plain:
+ *             schema:
+ *               type: string
+ *       '400':
+ *         description: Invalid request body
+ *       '401':
+ *         description: Unauthorized - Invalid credentials
+ */
 app.post('/user/login', async function(req, res){
     const { identification_No, password } = req.body;
     const hashedPassword = await generateHash(password);
     await login(res, identification_No, hashedPassword);
 });
 
+
+//user logout
+/**
+ * @swagger
+ * /user/logout:
+ *   post:
+ *     summary: User logout
+ *     description: Logout user by updating exit time in logs
+ *     tags:
+ *       - Staff
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       '200':
+ *         description: User successfully logged out
+ *       '400':
+ *         description: Invalid request body or user not logged in before
+ */
 app.post('/user/logout', async function(req, res){
     const {identification_No, password} = req.body;
     const currentDate = new Date();
@@ -288,14 +478,52 @@ app.post('/user/logout', async function(req, res){
     if(exist){
         if(await exist.password == password){
             await client.db("VMS").collection("Logs").updateOne({ identification_No: identification_No },{ $set: { exit_time: formattedTime } });
-            console.log("Successfully log Out!\nCheck out time: "+ formattedTime);
+            res.send("Successfully log Out!\nCheck out time: "+ formattedTime);
             console.log(exist.exit_time);
         }
     }else{
-        console.log("User not logged In before!")
+        res.send("User not logged In before!")
     }
 });
 
+
+//delete visitors
+/**
+ * @swagger
+ * /deleteVisitors/{id}:
+ *   delete:
+ *     summary: Delete visitor by ID
+ *     description: Delete a visitor and their health status by ID
+ *     tags:
+ *       - Staff
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the visitor to be deleted
+ *     requestBody:
+ *       required: false
+ *     responses:
+ *       '200':
+ *         description: Visitor deleted successfully
+ *       '400':
+ *         description: Visitor not found or insufficient permissions
+ *       '401':
+ *         description: Unauthorized - Invalid token or insufficient permissions
+ *     consumes:
+ *       - "application/json"
+ *     produces:
+ *       - "application/json"
+ *   securityDefinitions:
+ *     JWT:
+ *       type: "apiKey"
+ *       name: "Authorization"
+ *       in: "header"
+ */
 app.delete('/deleteVisitors/:id',async function(req, res) {
     const documentId = req.params.id;
     var token = req.header('Authorization').split(" ")[1];
@@ -309,19 +537,74 @@ if(decoded.role == "Admin"|| decoded.role == "Staff"){
         await client.db("VMS").collection("Health Status").deleteOne({ identification_No: documentId });
         res.send("Deleted Successfully!");
     }else{
-        console.log("Visitor not found!");
+        res.send("Visitor not found!");
     }}
     else{
-        console.log("No access!");
+        res.send("No access!");
     }
 });
 
+
+
 //login post for visitor
+/**
+ * @swagger
+ * /visitor/login:
+ *   post:
+ *     summary: Visitor login
+ *     description: Login for visitor authentication
+ *     tags:
+ *       - Visitors
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *               password:
+ *                  type: string
+ *     responses:
+ *       '200':
+ *         description: Visitor login successful
+ *       '401':
+ *         description: Invalid credentials or visitor not found
+ */
 app.post('/visitor/login', async function(req, res){
     const {identification_No, password} = req.body;
     visitorLogin(res, identification_No, password);
 });
 
+//View Visitor
+/**
+ * @swagger
+ * /user/view/visitor:
+ *   post:
+ *     summary: "View visitors"
+ *     description: "Retrieve visitors based on user role"
+ *     tags:
+ *       - Staff & Visitors
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: "Visitors retrieved successfully"
+ *       '400':
+ *         description: "Invalid token or error in retrieving visitors"
+ *       '401':
+ *         description: "Unauthorized - Invalid token or insufficient permissions"
+ *     consumes:
+ *       - "application/json"
+ *     produces:
+ *       - "application/json"
+ *   securityDefinitions:
+ *     JWT:
+ *       type: "apiKey"
+ *       name: "Authorization"
+ *       in: "header"
+ */
 app.post('/user/view/visitor', async function(req, res){
     var token = req.header('Authorization').split(" ")[1];
     try {
@@ -329,10 +612,73 @@ app.post('/user/view/visitor', async function(req, res){
         console.log(decoded.role);
         res.send(await viewVisitors(decoded.identification_No, decoded.role));
       } catch(err) {
-        console.log("Error!");
+        res.send("Error!");
       }
 });
 
+//update visitor
+/**
+ * @swagger
+ * /user/updateVisitor:
+ *   post:
+ *     summary: Update visitor information
+ *     description: Update visitor details based on user role
+ *     tags:
+ *       - Staff
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               gender:
+ *                 type: string
+ *               ethnicity:
+ *                 type: string
+ *               temperature:
+ *                 type: string
+ *               dateofbirth:
+ *                 type: string
+ *                 format: date
+ *               citizenship:
+ *                 type: string
+ *               document_type:
+ *                 type: string
+ *               expiryDate:
+ *                 type: string
+ *                 format: date
+ *               # Add other properties here...
+ *               recovered_from_covid_19:
+ *                 type: string
+ *               covid_19_test:
+ *                 type: string
+ *               date:
+ *                 type: string
+ *                 format: date
+ *     responses:
+ *       '200':
+ *         description: Visitor information updated successfully
+ *       '400':
+ *         description: Invalid request body or insufficient permissions
+ *       '401':
+ *         description: Unauthorized - Invalid token or insufficient permissions
+ *     consumes:
+ *       - "application/json"
+ *     produces:
+ *       - "application/json"
+ *   securityDefinitions:
+ *     JWT:
+ *       type: "apiKey"
+ *       name: "Authorization"
+ *       in: "header"
+ */
 
 app.post('/user/updateVisitor', async function(req, res){
     var token = req.header('Authorization').split(" ")[1];
@@ -346,7 +692,36 @@ app.post('/user/updateVisitor', async function(req, res){
     }
 });
 
-app.post('/user/viewLogs', async function(req, res){
+
+//To view logs for authorized user
+/**
+ * @swagger
+ * /user/view/Logs:
+ *   post:
+ *     summary: "View all logs in the database"
+ *     description: "Retrieve logs for all users in database"
+ *     tags:
+ *       - Staff
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: "Logs retrieved successfully"
+ *       '400':
+ *         description: "Invalid token or error in retrieving logs"
+ *       '401':
+ *         description: "Unauthorized - Invalid token or insufficient permissions"
+ *     consumes:
+ *       - "application/json"
+ *     produces:
+ *       - "application/json"
+ * securityDefinitions:
+ *   JWT:
+ *     type: "apiKey"
+ *     name: "Authorization"
+ *     in: "header"
+ */
+app.post('/user/view/Logs', async function(req, res){
     var token = req.header('Authorization').split(" ")[1];
     await client.connect()
     var decoded = jwt.verify(token, privatekey);
@@ -359,7 +734,28 @@ app.post('/user/viewLogs', async function(req, res){
     }
 })
 
-
+//Visitor logout
+/**
+ * @swagger
+ * /visitor/logout:
+ *   post:
+ *     summary: Visitor logout
+ *     description: Logout for visitors
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *     responses:
+ *       '200':
+ *         description: Visitor logged out successfully
+ *       '400': 
+ *         description: Invalid request body or user not logged in
+ */
 app.post('/visitor/logout', async function(req, res){
     const {identification_No} = req.body;
     const currentDate = new Date();
@@ -368,14 +764,14 @@ app.post('/visitor/logout', async function(req, res){
     const exist = await client.db("VMS").collection("Visitors").findOne({identification_No: identification_No});
     if(exist){
         await client.db("VMS").collection("Logs").updateOne({identification_No: identification_No},{$set:{exit_time: formattedTime}});
-        console.log("Successfully log Out!\nCheck out time: "+ formattedTime);
+        res.send("Successfully log Out!\nCheck out time: "+ formattedTime);
     }else{
-        console.log("User not logged In!");
+        res.send("User not logged In!");
     }
 });
 
 app.get('/', (req, res)=>{
-    res.send("Test deployment");
+    res.send("Testing deployment from zaidzaihan.azurewebsites.net");
 });
 
 
