@@ -14,6 +14,21 @@ const bcrypt = require('bcrypt');
 const saltround = 10;
 var hashed;
 
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
+const options = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title:'MyVMS API',
+            version: '1.0.0',
+        }
+    },
+    apis: ['./index.js'],//files containing annotations as above
+};
+const swaggerSpec = swaggerJsdoc(options);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 app.use(express.json())
 
 //Generate Hash for password
