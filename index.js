@@ -744,7 +744,7 @@ app.post('/user/register', async function(req, res) {
 
 
 //user to register
-app.post('/user/register', async function(req, res) {
+app.post('/user/newregister', async function(req, res) {
     try {
         //const token = req.headers.authorization.split(' ')[1];
         const { identification_No, name, password, phone_number } = req.body;
