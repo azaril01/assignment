@@ -668,7 +668,7 @@ app.post('/user/register', async function(req, res) {
  * @swagger
  * /user/register:
  *   post:
- *     summary: Register a new staff member
+ *     summary: Register a new staff member without approval
  *     description: Register a new staff member with identification number, name, password, and phone number.
  *     tags:
  *       - Security
