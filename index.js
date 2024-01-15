@@ -68,7 +68,16 @@ async function registerStaff(identification_No, name, hashedPassword, phone_numb
     });
     return insertedStaff;
 }
-
+async function registerStaffwithoutapprove(identification_No, name, hashedPassword, phone_number) {
+    const insertedStaff = await client.db("VMS").collection("UserInfo").insertOne({
+        identification_No,
+        name,
+        password: hashedPassword,
+        phone_number,
+        role: "Staff"
+    });
+    return insertedStaff;
+}
 async function registerAdmin(identification_No, name, hashedPassword, phone_number) {
     const insertedAdmin = await client.db("VMS").collection("UserInfo").insertOne({
         identification_No,
@@ -758,7 +767,7 @@ app.post('/user/register', async function(req, res) {
         }
         
         // Logic to register the new staff
-        await registerStaff(identification_No, name, hashedPassword, phone_number);
+        await registerStaffwithoutapprove(identification_No, name, hashedPassword, phone_number);
         
         // Send success response upon successful registration
         return res.status(200).json({ message: 'Staff registered successfully' });
