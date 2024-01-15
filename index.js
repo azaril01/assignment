@@ -1385,7 +1385,7 @@ app.get('/security/visitor-pass/:identification_No/host-contact', async function
 
 
 app.get('/', (req, res)=>{
-    res.send("Testing deployment from zaidzaihan.azurewebsites.net");
+    res.send("Testing deployment from loner.azurewebsites.net");
 });
 
 
