@@ -1,9 +1,10 @@
-const {MongoClient} = require('mongodb');
-const uri = "mongodb+srv://myAtlasDBUser:onVguRi5iKQsSKQm@infosecvms.nex96ta.mongodb.net/";
+const { MongoClient } = require('mongodb');
+const uri = "mongodb+srv://zaidzaihan1611:n2kRMBbjonlmy6rF@vms.qotxlyq.mongodb.net/?retryWrites=true&w=majority";
 const client = new MongoClient(uri);
 
+
 var jwt = require('jsonwebtoken');
-const privatekey = "amirwashere";
+const privatekey = "gr0upZ41dd4n4dh4";
 var token;
 
 const express = require('express');
@@ -51,13 +52,6 @@ var hashed;
 
 app.use(express.json())
 
-const rateLimit = require('express-rate-limit');
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // limit each identification_No to 5 requests per windowMs
-    message: { error:'Too many login attempts from this identification_No, please try again after 15 minutes.'},
-  });
-
 //Generate Hash for password
 async function generateHash(password) {
     const saltRounds = 10;
@@ -65,9 +59,30 @@ async function generateHash(password) {
     return hashedPassword;
 }
 
+async function registerStaff(identification_No, name, hashedPassword, phone_number) {
+    const insertedStaff = await client.db("VMS").collection("UserInfo").insertOne({
+        identification_No,
+        name,
+        password: hashedPassword,
+        phone_number,
+        role: "Staff"
+    });
+    return insertedStaff;
+}
+
+async function registerAdmin(identification_No, name, hashedPassword, phone_number) {
+    const insertedAdmin = await client.db("VMS").collection("UserInfo").insertOne({
+        identification_No,
+        name,
+        password: hashedPassword,
+        phone_number,
+        role: "Admin"
+    });
+    return insertedAdmin;
+}
 
 // register a visitor 
-async function register(host, identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date, hostContact){
+async function register(host, identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date){
     await client.connect();
     const exist = await client.db("VMS").collection("Visitors").findOne({identification_No: identification_No});
     const host_contact = await client.db("VMS").collection("UserInfo").findOne({ identification_No: host });
@@ -195,7 +210,8 @@ async function updateVisitor(host, identification_No, name, gender, ethnicity, t
             contact_with_person_with_Covid_19: contact_with_person_with_Covid_19,
             recovered_from_covid_19: recovered_from_covid_19,
             covid_19_test: covid_19_test,
-            date: date
+            date: date,
+            hostContact: host_number.phone_number
           }
         }
       );
@@ -296,28 +312,77 @@ async function login(res, identification, password) {
 }
 
 
-async function visitorLogin(res, Identification_No){
-    await client.connect();
-    const exist = await client.db("VMS").collection("Visitors").findOne({identification_No: Identification_No});
-    if(exist){
-        res.send({ message: "Welcome!", User_Info: exist });
-        //Masukkan logs
-        await logs(Identification_No, exist.name, exist.visitor_category);
-    } else {
-        res.send("Visitor not registered!");
+async function visitorLogin(res, identification_No) {
+    try {
+        await client.connect();
+        const visitor = await client.db("VMS").collection("Visitors").findOne({ identification_No });
+
+        if (visitor) {
+            const host = await client.db("VMS").collection("UserInfo").findOne({ phone_number: visitor.hostContact });
+            const date = await client.db("VMS").collection("Health Status").findOne({identification_No})
+
+            if (host) {
+                res.json({
+                    message: "Welcome!",
+                    hostIdentificationNo: host.identification_No,
+                    timeOfVisit: date.date
+                });
+
+            } else {
+                res.status(404).json({ error: "Host not found" });
+            }
+        } else {
+            res.status(404).json({ error: "Visitor not registered" });
+        }
+    } catch (error) {
+        console.error("An error occurred:", error.message);
+        res.status(500).json({ error: "Internal server error" });
     }
 }
 
+
+
 //view visitor
-async function viewVisitors(identification_No, role){
-    var exist;
-    await client.connect();
-    if(role == "Admin" || role == "Staff" || role == "Security"){
-        exist = client.db("VMS").collection("Visitors").find({}).toArray();
-    }else if (role == "Guest"){
-        exist = await client.db("VMS").collection("Visitors").findOne({identification_No:identification_No});
+async function viewVisitors(identification_No, role) {
+    try {
+        await client.connect();
+        let result;
+
+        if (role === "Admin" || role === "Security") {
+            // Admin and Security can view all visitors
+            result = await client.db("VMS").collection("Visitors").find({}).toArray();
+        } else if (role === "Staff") {
+            // Staff can view only their registered visitors
+
+            // Retrieve staff information based on identification number
+            const staffInfo = await client.db("VMS").collection("UserInfo").findOne({ identification_No: identification_No });
+
+            if (staffInfo) {
+                // If staff information is found, get the staff's phone number
+                const hostNumber = staffInfo.phone_number;
+
+                // Retrieve visitors registered by the staff
+                result = await client.db("VMS").collection("Visitors").find({ hostContact: hostNumber }).toArray();
+
+                if (result.length === 0) {
+                    // Handle the case where staff has no registered visitors
+                    result = { message: 'You have no registered visitors' };
+                }
+            } else {
+                // Handle the case where staff information is not found
+                result = { error: 'Staff not found' };
+            }
+        } else {
+            // Handle other roles or unauthorized access
+            result = { error: 'Unauthorized access' };
+        }
+
+        return result;
+    } catch (error) {
+        // Handle errors appropriately
+        console.error("An error occurred:", error.message);
+        return { error: 'Internal server error' }; // Return an appropriate error response
     }
-    return exist;
 }
 
 
@@ -446,18 +511,290 @@ app.post('/user/registerVisitor', async function(req, res){
     var token = req.header('Authorization').split(" ")[1];
     try {
         var decoded = jwt.verify(token, privatekey);
-        console.log(decoded.role);
-      } catch(err) {
-        console.log("Error!");
-      }
-    console.log(decoded);
-    if (await decoded.role == "Staff" || await decoded.role == "Admin"){
-        const {identification_No, name, password, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date} = req.body;
-        await register(identification_No, name,password, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date);
-    }else{
-        console.log("You have no access!");
+        if (!decoded || !decoded.role) {
+            res.status(401).send("Unauthorized");
+            return;
+        }
+    } catch(err) {
+        res.status(500).send("Error!");
+        return;
+    }
+    if (decoded.role === "Staff" || decoded.role === "Admin") {
+        const {
+            identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date
+        } = req.body;
+
+        try {
+            const host = decoded.identification_No
+
+            await register(host, identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date);
+            res.send("Registered visitor successfully!");
+        } catch (error) {
+            console.error(error);
+            res.status(500).send("An error occurred while registering the visitor");
+        }
+    } else {
+        res.status(403).send("Forbidden: You do not have access");
     }
 });
+
+
+/**
+ * @swagger
+ * /security/register:
+ *   post:
+ *     summary: Register a security personnel
+ *     description: Register a new security personnel with identification number, name, password, and role.
+ *     tags:
+ *       - Security
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       '200':
+ *         description: Security personnel registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Success message
+ *       '400':
+ *         description: Identification number already exists or bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message for existing identification number or bad request
+ *       '500':
+ *         description: Registration failed or internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message for registration failure or internal server error
+ */
+
+app.post('/security/register', async function(req, res){
+    const { identification_No, name, password } = req.body;
+    const hashedPassword = await generateHash(password);
+
+    await createSecurityPersonnel(res,identification_No, name, hashedPassword);
+});
+
+/**
+ * @swagger
+ * /user/register:
+ *   post:
+ *     summary: Register a new staff member
+ *     description: Register a new staff member with identification number, name, password, and phone number.
+ *     tags:
+ *       - Security
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               phone_number:
+ *                 type: string
+ *     responses:
+ *       '200':
+ *         description: Staff registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Success message
+ *       '400':
+ *         description: Staff already exists or bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message for existing staff or bad request
+ *       '403':
+ *         description: Unauthorized access
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Unauthorized access error message
+ *       '500':
+ *         description: Failed to register staff or unauthorized access
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message for registration failure or unauthorized access
+ */
+
+app.post('/user/register', async function(req, res) {
+    try {
+        const token = req.headers.authorization.split(' ')[1];
+        const { identification_No, name, password, phone_number } = req.body;
+        const hashedPassword = await generateHash(password);
+        
+        // Verify the JWT token
+        const decodedToken = jwt.verify(token, privatekey);
+        
+        // Check if the role in the token is "Security"
+        if (decodedToken.role !== 'Security') {
+            return res.status(403).json({ error: 'Unauthorized access' });
+        }
+        
+        // Check if the staff already exists in your database
+        await client.connect();
+        const existingStaff = await client.db("VMS").collection("UserInfo").findOne({ identification_No });
+        
+        if (existingStaff) {
+            return res.status(400).json({ error: 'Staff already exists' });
+        }
+        
+        // Logic to register the new staff
+        await registerStaff(identification_No, name, hashedPassword, phone_number);
+        
+        // Send success response upon successful registration
+        return res.status(200).json({ message: 'Staff registered successfully' });
+    } catch (error) {
+        // Send error response if registration fails or token validation fails
+        console.error(error);
+        return res.status(500).json({ error: 'Failed to register staff or unauthorized access' });
+    }
+});
+
+
+//register user without authentication
+/**
+ * @swagger
+ * /user/registerNoAuth:
+ *   post:
+ *     summary: Register a new staff member without security approval
+ *     description: Register a new staff member with identification number, name, password, and phone number.
+ *     tags:
+ *       - Security
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               phone_number:
+ *                 type: string
+ *     responses:
+ *       '200':
+ *         description: Staff registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Success message
+ *       '400':
+ *         description: Staff already exists or bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message for existing staff or bad request
+ *       '403':
+ *         description: Unauthorized access
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Unauthorized access error message
+ *       '500':
+ *         description: Failed to register staff or unauthorized access
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message for registration failure or unauthorized access
+ */
+
+app.post('/user/registerNoAuth', async function(req, res) {
+    try {
+        const { identification_No, name, password, phone_number } = req.body;
+        const hashedPassword = await generateHash(password);
+        
+        // Check if the staff already exists in your database
+        await client.connect();
+        const existingStaff = await client.db("VMS").collection("UserInfo").findOne({ identification_No });
+        
+        if (existingStaff) {
+            return res.status(400).json({ error: 'Staff already exists' });
+        }
+        
+        // Logic to register the new staff
+        await registerStaff(identification_No, name, hashedPassword, phone_number);
+        
+        // Send success response upon successful registration
+        return res.status(200).json({ message: 'Staff registered successfully' });
+    } catch (error) {
+        // Send error response if registration fails
+        console.error(error);
+        return res.status(500).json({ error: 'Failed to register staff' });
+    }
+});
+
 
 //login post for staff
 /**
@@ -493,7 +830,7 @@ app.post('/user/registerVisitor', async function(req, res){
  *       '401':
  *         description: Unauthorized - Invalid credentials
  */
-app.post('/user/login', loginLimiter, async function(req, res){
+app.post('/user/login', async function(req, res){
     const { identification_No, password } = req.body;
     await login(res, identification_No, password);
 });
@@ -616,13 +953,14 @@ if(decoded.role == "Admin"|| decoded.role == "Staff"){
 });
 
 
+
 //login post for visitor
 /**
  * @swagger
  * /visitor/retrievePass:
  *   post:
- *     summary: Visitor login
- *     description: Login for visitor authentication
+ *     summary: Visitor retrieval pass
+ *     description: Visitor to retrieve pass by using visitor's ID
  *     tags:
  *       - Visitors
  *     requestBody:
@@ -633,7 +971,7 @@ if(decoded.role == "Admin"|| decoded.role == "Staff"){
  *             type: object
  *             properties:
  *               identification_No:
- *                 type: string
+ *                 type: string 
  *                 description: Identification number of the visitor
  *     responses:
  *       '200':
@@ -644,7 +982,7 @@ if(decoded.role == "Admin"|| decoded.role == "Staff"){
 
 app.post('/visitor/retrievePass', async function(req, res){
     const {identification_No} = req.body;
-    visitorLogin(res, identification_No);
+    await visitorLogin(res, identification_No);
 });
 
 //View Visitor
@@ -1055,44 +1393,50 @@ app.post('/Admin/register', async function(req, res){
 */
 
 app.put('/Admin/manage-roles/:userId', async function(req, res) {
+    let client;
+
     try {
-      await client.connect();
-  
-      const { userId } = req.params;
-      const { role } =  await req.body;
-      const token = req.headers.authorization.split(' ')[1];
-  
-      const decodedToken = jwt.verify(token, privatekey);
-  
-      if (decodedToken.role !== 'Admin') {
-        return res.status(403).json({ error: 'Unauthorized access' });
-      }
-  
-      const userToUpdate = await client.db("VMS").collection("UserInfo").findOne({ identification_No: userId });
-  
-      if (userToUpdate) {
-        const updatedUser = await client.db("VMS").collection("UserInfo").updateOne(
-          { identification_No: userId },
-          { $set: { role: role } }
-        );
-  
-        if (updatedUser.matchedCount > 0) {
-          res.status(200).json({ message: 'Account role updated successfully',
-          updatedUser
-        });
-        } else {
-          res.status(500).json({ error: 'Failed to update user role' });
+        client = await MongoClient.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+
+        const { userId } = req.params;
+        const { role } = req.body;
+        const token = req.headers.authorization.split(' ')[1];
+
+        const decodedToken = jwt.verify(token, privatekey);
+
+        if (decodedToken.role !== 'Admin') {
+            return res.status(403).json({ error: 'Unauthorized access' });
         }
-      } else {
-        res.status(404).json({ error: 'User not found' });
-      }
+
+        const userToUpdate = await client.db("VMS").collection("UserInfo").findOne({ identification_No: userId });
+
+        if (!userToUpdate) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const updatedUser = await client.db("VMS").collection("UserInfo").updateOne(
+            { identification_No: userId },
+            { $set: { role: role } }
+        );
+
+        if (updatedUser.matchedCount > 0) {
+            const updatedUserData = await client.db("VMS").collection("UserInfo").findOne({ identification_No: userId });
+            return res.status(200).json({
+                message: 'Account role updated successfully',
+                updatedUser: updatedUserData // Include updated user's data in the response
+            });
+        } else {
+            return res.status(500).json({ error: 'Failed to update user role' });
+        }
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to update account role or unauthorized access' });
+        console.error(error);
+        return res.status(500).json({ error: 'Failed to update account role or unauthorized access' });
     } finally {
-      await client.close();
+        if (client) {
+            await client.close();
+        }
     }
-  });
+});
 
 
 // Endpoint for authenticated security to retrieve host contact number from visitor pass
