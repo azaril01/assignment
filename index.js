@@ -3,9 +3,18 @@ const uri = "mongodb+srv://admin:zufGjkGWbKyCKcNB@infosecvms.nex96ta.mongodb.net
 const client = new MongoClient(uri);
 
 
+
 var jwt = require('jsonwebtoken');
 const privatekey = "gr0upZ41dd4n4dh4";
-var token;
+
+const rateLimit = require('express-rate-limit');
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // 5 requests per window
+    message: 'Too many login attempts from this IP, please try again after 15 minutes',
+});
+
 
 const express = require('express');
 const app = express();
@@ -48,7 +57,6 @@ const swaggerSpec = swaggerJsdoc(options);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 const bcrypt = require('bcrypt');
-var hashed;
 
 app.use(express.json())
 
@@ -82,70 +90,89 @@ async function registerAdmin(identification_No, name, hashedPassword, phone_numb
 }
 
 // register a visitor 
-async function register(host, identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date){
-    await client.connect();
-    const exist = await client.db("VMS").collection("Visitors").findOne({identification_No: identification_No});
-    const host_contact = await client.db("VMS").collection("UserInfo").findOne({ identification_No: host });
-    const host_number =  await host_contact.phone_number;
-    //hashed = await bcrypt.hash(password,10);
-    if(exist){
-        console.log("User is already registered!");
-    }else{
-        await client.db("VMS").collection("Visitors").insertOne({
-            identification_No: identification_No,
-            name: name,
-            gender: gender,
-            ethnicity: ethnicity,
-            temperature: temperature,
-            dateofbirth: dateofbirth,
-            citizenship: citizenship,
-            document_type: document_type,
-            expiryDate: expiryDate,
-            address: address,
-            town: town,
-            postcode: postcode,
-            state: state,
-            country: country,
-            phone_number: phone_number,
-            vehicle_number: vehicle_number,
-            vehicle_type: vehicle_type,
-            visitor_category: visitor_category,
-            preregistered_pass: preregistered_pass,
-            no_of_visitors: no_of_visitors,
-            purpose_of_visit: purpose_of_visit,
-            visit_limit_hrs: visit_limit_hrs,
-            visit_limit_min: visit_limit_min,
-            To_meet: To_meet,
-            Host_Information: Host_Information,
-            Location_or_department: Location_or_department,
-            Unit_no: Unit_no,
-            Location_Information: Location_Information,
-            Permit_number: Permit_number,
-            Delivery_Order: Delivery_Order, 
-            Remarks: Remarks,
-            hostContact: host_number
+async function register(host, identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, date, time, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test) {
+    try {
+        await client.connect();
 
+        const existingVisitor = await client.db("VMS").collection("Visitors").findOne({ identification_No });
+
+        if (existingVisitor) {
+            console.log("User is already registered!");
+            return;
+        }
+
+        const hostContact = await client.db("VMS").collection("UserInfo").findOne({ identification_No: host });
+        if (!hostContact) {
+            console.log("Host not found!");
+            return;
+        }
+
+        const hostNumber = hostContact.phone_number;
+
+        await client.db("VMS").collection("Visitors").insertOne({
+            identification_No,
+            name,
+            gender,
+            ethnicity,
+            temperature,
+            dateofbirth,
+            citizenship,
+            document_type,
+            expiryDate,
+            address,
+            town,
+            postcode,
+            state,
+            country,
+            phone_number,
+            vehicle_number,
+            vehicle_type,
+            visitor_category,
+            preregistered_pass,
+            no_of_visitors,
+            date,
+            time,
+            purpose_of_visit,
+            visit_limit_hrs,
+            visit_limit_min,
+            To_meet,
+            Host_Information,
+            Location_or_department,
+            Unit_no,
+            Location_Information,
+            Permit_number,
+            Delivery_Order,
+            Remarks,
+            hostContact: hostNumber
         });
+
         await client.db("VMS").collection("Health Status").insertOne({
-            identification_No: identification_No,
+            identification_No,
             Name: name,
-            temperature: temperature,
-            fever: fever,
-            sore_throat: sore_throat,
-            dry_cough: dry_cough,
-            runny_nose: runny_nose,
-            shortness_of_breath: shortness_of_breath,
-            body_ache: body_ache,
-            travelled_oversea_last_14_days: travelled_oversea_last_14_days,
-            contact_with_person_with_Covid_19: contact_with_person_with_Covid_19,
-            recovered_from_covid_19: recovered_from_covid_19,
-            covid_19_test: covid_19_test,
-            date: date,
-            hostContact: phone_number.phone_number
+            temperature,
+            fever,
+            sore_throat,
+            dry_cough,
+            runny_nose,
+            shortness_of_breath,
+            body_ache,
+            travelled_oversea_last_14_days,
+            contact_with_person_with_Covid_19,
+            recovered_from_covid_19,
+            covid_19_test,
+            date,
+            hostContact: hostNumber
         });
-        console.log("registered successfully!");
+
+        console.log("Registered successfully!");
+    } catch (error) {
+        console.error("An error occurred:", error.message);
+        throw error; // Propagate the error for better handling at the calling site
+    } finally {
+        await client.close();
     }
 }
+
 
 
 //update Visitor for admin
@@ -324,8 +351,9 @@ async function visitorLogin(res, identification_No) {
             if (host) {
                 res.json({
                     message: "Welcome!",
-                    hostIdentificationNo: host.identification_No,
-                    timeOfVisit: date.date
+                    "Host Identification No": host.identification_No,
+                    "Time Of Visit": date.date,
+                    "Date of Visit" : date.time
                 });
 
             } else {
@@ -445,6 +473,12 @@ async function viewVisitors(identification_No, role) {
  *                 type: string
  *               no_of_visitors:
  *                 type: string
+ *               date:
+ *                 type: string
+ *                 format: date
+ *               time:
+ *                 type: string
+ *                 format: time
  *               purpose_of_visit:
  *                 type: string
  *               visit_limit_hrs:
@@ -487,9 +521,6 @@ async function viewVisitors(identification_No, role) {
  *                 type: string
  *               covid_19_test:
  *                 type: string
- *               date:
- *                 type: string
- *                 format: date
  *     responses:
  *       '200':
  *         description: Visitor registration successful
@@ -501,33 +532,36 @@ async function viewVisitors(identification_No, role) {
  *       - "application/json"
  *     produces:
  *       - "application/json"
- *   securityDefinitions:
- *     JWT:
- *       type: "apiKey"
- *       name: "Authorization"
- *       in: "header"
  */
+
 app.post('/user/registerVisitor', async function(req, res){
-    var token = req.header('Authorization').split(" ")[1];
+    let decoded;
+
+    const token = req.header('Authorization').split(" ")[1];
+
     try {
-        var decoded = jwt.verify(token, privatekey);
+        decoded = jwt.verify(token, privatekey);
         if (!decoded || !decoded.role) {
-            res.status(401).send("Unauthorized");
+            res.status(401).send("Unauthorized: Invalid or missing token");
             return;
         }
-    } catch(err) {
-        res.status(500).send("Error!");
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error during token verification");
         return;
     }
+
     if (decoded.role === "Staff" || decoded.role === "Admin") {
         const {
-            identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date
+            identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, date, time, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test
         } = req.body;
 
         try {
-            const host = decoded.identification_No
+            const host = decoded.identification_No;
 
-            await register(host, identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date);
+            // Assuming register is an asynchronous function that may throw errors
+            await register(host, identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, date, time, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test);
+
             res.send("Registered visitor successfully!");
         } catch (error) {
             console.error(error);
@@ -537,6 +571,7 @@ app.post('/user/registerVisitor', async function(req, res){
         res.status(403).send("Forbidden: You do not have access");
     }
 });
+
 
 
 /**
@@ -689,7 +724,27 @@ app.post('/user/register', async function(req, res) {
         if (existingStaff) {
             return res.status(400).json({ error: 'Staff already exists' });
         }
-        
+
+        // Password policy checks
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+        }
+
+        // Check for at least one capital letter
+        if (!/[A-Z]/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one capital letter' });
+        }
+
+        // Check for at least one unique character (e.g., special character)
+        if (!/[^a-zA-Z0-9]/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one special character' });
+        }
+
+        // Check for at least one number
+        if (!/\d/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one number' });
+        }
+
         // Logic to register the new staff
         await registerStaff(identification_No, name, hashedPassword, phone_number);
         
@@ -701,6 +756,7 @@ app.post('/user/register', async function(req, res) {
         return res.status(500).json({ error: 'Failed to register staff or unauthorized access' });
     }
 });
+
 
 
 //register user without authentication
@@ -772,8 +828,17 @@ app.post('/user/register', async function(req, res) {
 
 app.post('/user/registerNoAuth', async function(req, res) {
     try {
+        const token = req.headers.authorization.split(' ')[1];
         const { identification_No, name, password, phone_number } = req.body;
         const hashedPassword = await generateHash(password);
+        
+        // Verify the JWT token
+        const decodedToken = jwt.verify(token, privatekey);
+        
+        // Check if the role in the token is "Security"
+        if (decodedToken.role !== 'Security') {
+            return res.status(403).json({ error: 'Unauthorized access' });
+        }
         
         // Check if the staff already exists in your database
         await client.connect();
@@ -782,16 +847,36 @@ app.post('/user/registerNoAuth', async function(req, res) {
         if (existingStaff) {
             return res.status(400).json({ error: 'Staff already exists' });
         }
-        
+
+        // Password policy checks
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+        }
+
+        // Check for at least one capital letter
+        if (!/[A-Z]/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one capital letter' });
+        }
+
+        // Check for at least one unique character (e.g., special character)
+        if (!/[^a-zA-Z0-9]/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one special character' });
+        }
+
+        // Check for at least one number
+        if (!/\d/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one number' });
+        }
+
         // Logic to register the new staff
         await registerStaff(identification_No, name, hashedPassword, phone_number);
         
         // Send success response upon successful registration
         return res.status(200).json({ message: 'Staff registered successfully' });
     } catch (error) {
-        // Send error response if registration fails
+        // Send error response if registration fails or token validation fails
         console.error(error);
-        return res.status(500).json({ error: 'Failed to register staff' });
+        return res.status(500).json({ error: 'Failed to register staff or unauthorized access' });
     }
 });
 
@@ -830,7 +915,7 @@ app.post('/user/registerNoAuth', async function(req, res) {
  *       '401':
  *         description: Unauthorized - Invalid credentials
  */
-app.post('/user/login', async function(req, res){
+app.post('/user/login',loginLimiter, async function(req, res){
     const { identification_No, password } = req.body;
     await login(res, identification_No, password);
 });
@@ -1287,15 +1372,37 @@ app.post('/visitor/returnPass', async function(req, res){
  *                   type: string
  *                   description: Error message for registration failure
  */
-app.post('/Admin/register', async function(req, res){
+app.post('/Admin/register', async function(req, res) {
     const { identification_No, name, password, phone_number } = req.body;
     const hashedPassword = await generateHash(password); // Encrypting the password
     try {
         await client.connect();
         const existingAdmin = await client.db("VMS").collection("UserInfo").findOne({ identification_No });
+
+        // Password policy checks
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+        }
+
+        // Check for at least one capital letter
+        if (!/[A-Z]/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one capital letter' });
+        }
+
+        // Check for at least one unique character (e.g., special character)
+        if (!/[^a-zA-Z0-9]/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one special character' });
+        }
+
+        // Check for at least one number
+        if (!/\d/.test(password)) {
+            return res.status(400).json({ error: 'Password must contain at least one number' });
+        }
+
         if (existingAdmin) {
             return res.status(400).json({ error: 'Admin already exists' });
         }
+
         await registerAdmin(identification_No, name, hashedPassword, phone_number);
         res.status(200).json({ message: 'Admin registered successfully' });
     } catch (error) {
@@ -1303,7 +1410,6 @@ app.post('/Admin/register', async function(req, res){
         res.status(500).json({ error: 'Failed to register admin' });
     }
 });
-
 //Additional API
 /**
 * @swagger
